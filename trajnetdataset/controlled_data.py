@@ -5,6 +5,9 @@ import argparse
 import os
 import itertools
 
+import csv
+import pandas as pd
+
 import numpy as np
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
@@ -13,7 +16,7 @@ import rvo2
 import pickle
 import socialforce
 from socialforce.potentials import PedPedPotential
-from socialforce.fieldofview import FieldOfView
+from socialforce.field_of_view import FieldOfView
 
 def generate_circle_crossing(num_ped, sim=None, radius=4, mode=None): 
     positions = []
@@ -150,6 +153,41 @@ def generate_sf_trajectory(sim_scene, num_ped, sf_params=[0.5, 2.1, 0.3], end_ra
 
     return trajectories, count
 
+def generate_pygame_trajectory(scene_file, goal_file, end_range=1.0):
+    positions = []
+    goals = []
+    valid = False
+    rows = pd.read_csv(scene_file)
+    rows = rows.to_numpy()
+    goal_rows = pd.read_csv(goal_file)
+    goal_rows = goal_rows.to_numpy()
+    num_ped = 0
+    for x in rows[0][1:]:
+        if x != -1:
+            num_ped += 1
+        else :
+            break
+    reaching_goal_by_ped = [False] * num_ped
+
+    for ped in range(num_ped):
+        goals.append((goal_rows[0][ped], goal_rows[1][ped]))
+
+    for ped in range(1, num_ped + 1):
+        positions.append((rows[0][ped], rows[1][ped]))
+    trajectories = [[positions[i]] for i in range(num_ped)]
+    row_count = 2
+    while row_count < len(rows):
+        for ped in range(1, num_ped + 1):
+            position = (rows[row_count][ped], rows[row_count + 1][ped])
+            if not reaching_goal_by_ped[ped - 1]:
+                trajectories[ped - 1].append(position)
+            if np.linalg.norm(np.array(position) - np.array(goals[ped - 1])) < end_range:
+                reaching_goal_by_ped[ped - 1] = True
+        row_count += 2
+    done = all(reaching_goal_by_ped)
+    if done:
+        valid = True
+    return trajectories, goals, valid, num_ped
 
 def getAngle(a, b, c):
     """
@@ -373,9 +411,9 @@ def write_goals(filename, dict_dest):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--simulator', default='orca',
-                        choices=('orca', 'social_force'))
-    parser.add_argument('--simulation_scene', default='circle_crossing',
-                        choices=('circle_crossing'))
+                        choices=('orca', 'social_force', 'pygame'))
+    parser.add_argument('--simulation_scene', default=None,
+                        choices=('circle_crossing', None))
     parser.add_argument('--style', required=False, default=None)
     parser.add_argument('--num_ped', type=int, default=10,
                         help='Number of ped in scene')
@@ -402,12 +440,18 @@ def main():
     output_file = 'data/raw/controlled/'
     if args.test:
         output_file = output_file + 'test_'
-    output_file = output_file \
-                  + args.simulator + '_' \
-                  + args.simulation_scene + '_' \
-                  + str(num_ped) + 'ped_' \
-                  + str(num_scenes) + 'scenes_' \
-                  + '.txt'
+    if args.simulation_scene is not None:
+        output_file = output_file \
+                    + args.simulator + '_' \
+                    + args.simulation_scene + '_' \
+                    + str(num_ped) + 'ped_' \
+                    + str(num_scenes) + 'scenes_' \
+                    + '.txt'
+    else:
+        output_file = output_file \
+                    + args.simulator + '_' \
+                    + str(num_scenes) + 'scenes_' \
+                    + '.txt'
     print(output_file)
 
     ## removes the file, if previously generated
@@ -440,6 +484,12 @@ def main():
             trajectories, valid = generate_sf_trajectory(sim_scene=args.simulation_scene,
                                                          num_ped=num_ped,
                                                          sf_params=[0.5, 1.0, 0.1])
+
+        elif args.simulator == 'pygame':
+            scene_file = 'scenes/scene' + str(i + 1) + '.csv'
+            goal_file = 'goals/scene' + str(i + 1) + 'Goal.csv'
+            trajectories, goals, valid, num_ped = generate_pygame_trajectory(scene_file=scene_file, goal_file=goal_file)
+
         else:
             raise NotImplementedError
 
@@ -455,10 +505,14 @@ def main():
         count += num_ped
 
     ## Write Goal Dict of ORCA
-    goal_filename = args.simulator + '_' \
-                    + args.simulation_scene + '_' \
-                    + str(num_ped) + 'ped_' \
-                    + str(num_scenes) + 'scenes_'
+    if args.simulation_scene is not None:
+        goal_filename = args.simulator + '_' \
+                        + args.simulation_scene + '_' \
+                        + str(num_ped) + 'ped_' \
+                        + str(num_scenes) + 'scenes_'
+    else:
+        goal_filename = args.simulator + '_' \
+                        + str(num_scenes) + 'scenes_'
     write_goals(goal_filename, dict_dest)
 
 
