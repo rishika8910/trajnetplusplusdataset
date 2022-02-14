@@ -156,7 +156,7 @@ def generate_sf_trajectory(sim_scene, num_ped, sf_params=[0.5, 2.1, 0.3], end_ra
 def generate_pygame_trajectory(scene_file, goal_file, end_range=1.0):
     positions = []
     goals = []
-    valid = False
+    valid = True
     rows = pd.read_csv(scene_file)
     rows = rows.to_numpy()
     goal_rows = pd.read_csv(goal_file)
@@ -185,8 +185,8 @@ def generate_pygame_trajectory(scene_file, goal_file, end_range=1.0):
                 reaching_goal_by_ped[ped - 1] = True
         row_count += 2
     done = all(reaching_goal_by_ped)
-    if done:
-        valid = True
+    if not done or not are_smoothes(trajectories):
+        valid = False
     return trajectories, goals, valid, num_ped
 
 def getAngle(a, b, c):
