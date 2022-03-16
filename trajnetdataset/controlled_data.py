@@ -4,6 +4,9 @@ import random
 import argparse
 import os
 import itertools
+import json
+import re
+import pysparkling
 
 import csv
 import pandas as pd
@@ -17,6 +20,9 @@ import pickle
 import socialforce
 from socialforce.potentials import PedPedPotential
 from socialforce.field_of_view import FieldOfView
+import sys
+sys.path.insert(0, '/mnt/c/Users/hp/Desktop/mini-project/trajnet++/trajnetnew')
+from trajnettools.data import PygameTrackRow
 
 def generate_circle_crossing(num_ped, sim=None, radius=4, mode=None): 
     positions = []
@@ -153,7 +159,7 @@ def generate_sf_trajectory(sim_scene, num_ped, sf_params=[0.5, 2.1, 0.3], end_ra
 
     return trajectories, count
 
-def generate_pygame_trajectory(scene_file, goal_file, end_range=1.0):
+def generate_pygame_trajectory(scene_file, goal_file, groups_file, obstacles_file, end_range=5.0):
     positions = []
     goals = []
     valid = False
@@ -181,13 +187,21 @@ def generate_pygame_trajectory(scene_file, goal_file, end_range=1.0):
             position = (rows[row_count][ped], rows[row_count + 1][ped])
             if not reaching_goal_by_ped[ped - 1]:
                 trajectories[ped - 1].append(position)
-            if np.linalg.norm(np.array(position) - np.array(goals[ped - 1])) < end_range:
+            if np.linalg.norm(np.array(position) - np.array(goals[ped - 1])) <= end_range:
                 reaching_goal_by_ped[ped - 1] = True
         row_count += 2
     done = all(reaching_goal_by_ped)
     if done:
         valid = True
-    return trajectories, goals, valid, num_ped
+
+    group_row = pd.read_csv(groups_file)
+    group_row = group_row.to_numpy()
+    group_row = [list(map(int, re.findall(r'\d+', column))) for column in group_row[0] if column != '[-1]']
+    obstacles_rows = pd.read_csv(obstacles_file)
+    obstacles_rows = obstacles_rows.to_numpy()
+    obstacles_rows = [list(map(int, re.findall(r'\d+', row[0]))) for row in obstacles_rows]
+
+    return trajectories, goals, group_row, obstacles_rows, valid, num_ped
 
 def getAngle(a, b, c):
     """
@@ -236,6 +250,33 @@ def find_collisions(trajectories, max_steps):
                 return True
 
     return False
+
+def write_pygame_to_txt(trajectories, groups, obstacles, path, count, frame, dict_dest=None, goals=None):
+    last_frame = 0
+    with open(path, 'a') as fo:
+        track_data = []
+        for i, _ in enumerate(trajectories):
+            ped_id = i + 1
+            group = []
+            for g in groups:
+                if ped_id in g:
+                    group = g
+                    break
+            for t, _ in enumerate(trajectories[i]):
+                track_data.append('{}, {}, {}, {}, {}, {}'.format(t+frame, count+i,
+                                                          trajectories[i][t][0],
+                                                          trajectories[i][t][1], group, obstacles))
+
+                if t == len(trajectories[i])-1 and t+frame > last_frame:
+                    last_frame = t+frame
+            if goals:
+                dict_dest[count+i] = goals[i]
+
+        for track in track_data:
+            fo.write(track)
+            fo.write('\n')
+
+    return last_frame
 
 def write_to_txt(trajectories, path, count, frame, dict_dest=None, goals=None):
     """ Write Trajectories to the text file """
@@ -488,8 +529,9 @@ def main():
         elif args.simulator == 'pygame':
             scene_file = 'scenes/scene' + str(i + 1) + '.csv'
             goal_file = 'goals/scene' + str(i + 1) + 'Goal.csv'
-            trajectories, goals, valid, num_ped = generate_pygame_trajectory(scene_file=scene_file, goal_file=goal_file)
-
+            groups_file = 'groups/scene' + str(i + 1) + 'Groups.csv'
+            obstacles_file = 'obstacles/scene' + str(i + 1) + 'Obstacles.csv'
+            trajectories, goals, groups, obstacles, valid, num_ped = generate_pygame_trajectory(scene_file=scene_file, goal_file=goal_file, groups_file=groups_file, obstacles_file=obstacles_file)
         else:
             raise NotImplementedError
 
@@ -498,7 +540,13 @@ def main():
 
         ## Write if the scene is valid
         if valid:
-            last_frame = write_to_txt(trajectories, output_file,
+            if args.simulator == 'pygame':
+                last_frame = write_pygame_to_txt(trajectories, groups, obstacles, output_file,
+                                      count=count, frame=last_frame+5,
+                                      dict_dest=dict_dest,
+                                      goals=goals)
+            else:
+                last_frame = write_to_txt(trajectories, output_file,
                                       count=count, frame=last_frame+5,
                                       dict_dest=dict_dest,
                                       goals=goals)
