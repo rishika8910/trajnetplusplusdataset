@@ -93,6 +93,13 @@ def controlled(sc, input_file):
             .map(readers.controlled)
             .cache())
 
+def pygameData(sc, input_file):
+    print('processing ' + input_file)
+    return (sc
+            .textFile(input_file)
+            .map(readers.pygameData)
+            .cache())
+
 def get_trackrows(sc, input_file):
     print('processing ' + input_file)
     return (sc
@@ -280,10 +287,10 @@ def main():
     else:
         # Note: Generate Trajectories First! See command below
         ## 'python -m trajnetdataset.controlled_data <args>'
-        write(controlled(sc, 'data/raw/controlled/orca_circle_crossing_5ped_1000scenes_.txt'),
-              'output_pre/{split}/orca_five_synth.ndjson', args)
-        categorize(sc, 'output_pre/{split}/orca_five_synth.ndjson', args)
-        edit_goal_file('orca_circle_crossing_5ped_1000scenes_.pkl', 'orca_five_synth.pkl')
+        write(pygameData(sc, 'data/raw/controlled/pygame_1scenes_.txt'),
+              'output_pre/{split}/pygame_synth.ndjson', args)
+        # categorize(sc, 'output_pre/{split}/orca_five_synth.ndjson', args)
+        # edit_goal_file('orca_circle_crossing_5ped_1000scenes_.pkl', 'orca_five_synth.pkl')
 
 if __name__ == '__main__':
     main()

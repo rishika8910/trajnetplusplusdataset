@@ -1,6 +1,7 @@
 """ Read Raw files as TrackRows """
 
 import json
+import re
 import os
 import xml.etree.ElementTree
 
@@ -8,6 +9,11 @@ import numpy as np
 import scipy.interpolate
 
 from trajnetplusplustools import TrackRow
+import sys
+path = os.getcwd()
+parentpath = os.path.abspath(os.path.join(path, os.pardir))
+sys.path.insert(0, parentpath)
+from trajnettools.data import PygameTrackRow
 
 
 def biwi(line):
@@ -271,6 +277,20 @@ def controlled(line):
                     int(float(line[1])),
                     float(line[2]),
                     float(line[3]))
+
+def pygameData(line):
+    line = [e for e in line.split(',  ') if e != '']
+    groups = [list(map(int, re.findall(r'\d+', line[4])))]
+    obstacles = [list(map(int, re.findall(r'\d+', line[5])))]
+    obstacles = obstacles[0]
+    obstacles  = [obstacles[i:i + 2] for i in range(0, len(obstacles), 2)] 
+    return PygameTrackRow(int(float(line[0])),
+                    int(float(line[1])),
+                    float(line[2]),
+                    float(line[3]),
+                    groups,
+                    obstacles
+                    )
 
 def get_trackrows(line):
     line = json.loads(line)

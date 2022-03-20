@@ -20,9 +20,6 @@ import pickle
 import socialforce
 from socialforce.potentials import PedPedPotential
 from socialforce.field_of_view import FieldOfView
-import sys
-sys.path.insert(0, '/mnt/c/Users/hp/Desktop/mini-project/trajnet++/trajnetnew')
-from trajnettools.data import PygameTrackRow
 
 def generate_circle_crossing(num_ped, sim=None, radius=4, mode=None): 
     positions = []
@@ -263,7 +260,7 @@ def write_pygame_to_txt(trajectories, groups, obstacles, path, count, frame, dic
                     group = g
                     break
             for t, _ in enumerate(trajectories[i]):
-                track_data.append('{}, {}, {}, {}, {}, {}'.format(t+frame, count+i,
+                track_data.append('{},  {},  {},  {},  {},  {}'.format(t+frame, count+i,
                                                           trajectories[i][t][0],
                                                           trajectories[i][t][1], group, obstacles))
 
@@ -499,7 +496,7 @@ def main():
     if os.path.isfile(output_file):
         os.remove(output_file)
 
-    count = 0
+    count = 1
     last_frame = -5
 
     dict_dest = {}

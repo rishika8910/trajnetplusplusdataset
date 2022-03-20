@@ -5,6 +5,13 @@ from collections import defaultdict
 import trajnetplusplustools
 from trajnetplusplustools import SceneRow
 
+import sys
+path = os.getcwd()
+parentpath = os.path.abspath(os.path.join(path, os.pardir))
+sys.path.insert(0, parentpath)
+from trajnettools.data import PygameSceneRow
+from trajnettools import writer
+
 
 class Scenes(object):
     def __init__(self, fps, start_scene_id=0, args=None):
@@ -58,15 +65,15 @@ class Scenes(object):
                               .collectAsMap())
 
         def to_scene_row(ped_frames):
-            ped_id, scene_frames = ped_frames
-            row = SceneRow(self.scene_id, ped_id, scene_frames[0], scene_frames[-1], self.fps, 0)
+            key, scene_frames = ped_frames
+            row = PygameSceneRow(self.scene_id, key[0], scene_frames[0], scene_frames[-1], key[1][0], self.fps, key[2])
             self.scene_id += 1
             return row
 
         # scenes: pedestrian of interest, [frames]
         scenes = (
             rows
-            .groupBy(lambda r: r.pedestrian)
+            .groupBy(lambda r: tuple([r.pedestrian, tuple([tuple(e) for e in r.group]), tuple([tuple(e) for e in r.obstacles])]))
             .filter(lambda p_path: len(p_path[1]) >= self.chunk_size)
             .mapValues(lambda path: sorted(path, key=lambda p: p.frame))
             .flatMapValues(lambda path: [
@@ -91,14 +98,14 @@ class Scenes(object):
 
             .cache()
         )
-
+        
+        
         self.frames |= set(scenes
                            .flatMap(lambda ped_frames:
                                     ped_frames[1]
                                     if self.visible_chunk is None
                                     else ped_frames[1][:self.visible_chunk])
                            .toLocalIterator())
-
         return scenes.map(to_scene_row)
 
 
@@ -112,11 +119,10 @@ class Scenes(object):
         tracks = rows.filter(lambda r: r.frame in self.frames)
         all_data = rows.context.union((scenes, tracks))
 
-        ## removes the file, if previously generated
+        # removes the file, if previously generated
         if os.path.isfile(output_file):
             os.remove(output_file)
 
-        ## write scenes and tracks
-        all_data.map(trajnetplusplustools.writers.trajnet).saveAsTextFile(output_file)
-
+        # write scenes and tracks
+        all_data.map(writer.trajnet).saveAsTextFile(output_file)
         return self
